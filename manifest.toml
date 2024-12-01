@@ -1,0 +1,72 @@
+packaging_format = 2
+
+id = "twenty"
+name = "Twenty CRM"
+description.en = "Modern, powerful, platform to manage your customer relationships."
+
+version = "0.33.6~ynh2"
+
+maintainers = ["ruairif"]
+
+[upstream]
+license = "AGPL"
+website = "https://twenty.com/"
+code = "https://github.com/twentyhq/twenty/"
+admindoc = "https://twenty.com/developers"
+userdoc = "https://twenty.com/user-guide"
+
+[integration]
+yunohost = ">= 11.2.30"
+helpers_version = "2.1"
+architectures = "all"
+multi_instance = false
+ldap = "not_relevant"
+sso = "not_relevant"
+disk = "200M"
+ram.build = "512M"
+ram.runtime = "512M"
+
+[install]
+    [install.domain]
+    type = "domain"
+
+    [install.path]
+    type = "path"
+    default = "/"
+
+    [install.init_main_permission]
+    type = "group"
+    default = "visitors"
+
+[resources]
+
+    [resources.sources]
+
+    [resources.sources.main]
+    url = "https://github.com/twentyhq/twenty/archive/refs/tags/v0.33.6.tar.gz"
+    sha256 = "05084ec9e5e45eeb5906c1be207656189c39a24813017191d941e2fad27091e7"
+
+    autoupdate.strategy = "latest_github_tag"
+
+    [resources.system_user]
+    allow_email = true
+
+    [resources.install_dir]
+
+    [resources.data_dir]
+    subdirs = ["storage"]
+
+    [resources.permissions]
+    main.url = "/"
+
+    [resources.ports]
+
+    [resources.apt]
+    packages = "postgresql, postgresql-contrib, redis-server"
+
+    extras.yarn.repo = "deb https://dl.yarnpkg.com/debian/ stable main"
+    extras.yarn.key = "https://dl.yarnpkg.com/debian/pubkey.gpg"
+    extras.yarn.packages = "yarn"
+
+    [resources.database]
+    type = "postgresql"

@@ -1,0 +1,106 @@
+#!/bin/bash
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+#=================================================
+# RETRIEVE ARGUMENTS FROM THE MANIFEST
+#=================================================
+
+redis_db=$(ynh_redis_get_free_db)
+
+#=================================================
+# STORE SETTINGS FROM MANIFEST
+#=================================================
+
+ynh_app_setting_set --app="$app" --key=app_secret --value="$(openssl rand -base64 32)"
+ynh_app_setting_set --app="$app" --key=redis_db --value="$redis_db"
+
+#=================================================
+# INSTALL DEPENDENCIES
+#=================================================
+ynh_script_progression --message="Installing nodejs..."
+
+ynh_exec_warn_less ynh_install_nodejs --nodejs_version=$nodejs_version
+
+#=================================================
+# CREATE A POSTGRESQL DATABASE
+#=================================================
+ynh_script_progression --message="Initializing PostgreSQL database..."
+
+ynh_psql_execute_as_root --sql="CREATE DATABASE IF NOT EXISTS $db_name;"
+
+#=================================================
+# DOWNLOAD, CHECK AND UNPACK SOURCE
+#=================================================
+ynh_script_progression --message="Setting up source files..."
+
+ynh_setup_source --dest_dir="$install_dir"
+
+chmod -R o-rwx "$install_dir"
+chown -R $app:www-data "$install_dir"
+
+#=================================================
+# ADD A CONFIGURATION
+#=================================================
+ynh_script_progression --message="Adding twenty configuration environment..."
+
+ynh_add_config --template="twenty.env" --destination="$install_dir/.env"
+chmod 400 "$install_dir/.env"
+chown $app:$app "$install_dir/.env"
+
+#=================================================
+# BUILD YARN DEPENDENCIES
+#=================================================
+ynh_script_progression --message="Building Yarn dependencies..."
+
+pushd "$install_dir"
+	ynh_use_nodejs
+	ynh_exec_warn_less ynh_exec_as $app env $ynh_node_load_PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0 yarn config set network-timeout 300000
+	ynh_exec_warn_less ynh_exec_as $app env $ynh_node_load_PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0 yarn install --production --pure-lockfile
+	ynh_exec_warn_less ynh_exec_as $app env $ynh_node_load_PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0 yarn cache clean
+popd
+
+#=================================================
+# APPLY SYSTEM CONFIGURATIONS
+#=================================================
+ynh_script_progression --message="Adding system configurations..."
+
+ynh_add_nginx_config
+
+ynh_add_systemd_config
+
+mkdir -p "/var/log/$app"
+touch "/var/log/$app/$app.log"
+chown -R $app:$app "/var/log/$app"
+
+ynh_use_logrotate
+
+yunohost service add $app --description="Modern, powerful CRM platform" --log="/var/log/$app/$app.log"
+
+#=================================================
+# SETUP DATABASE
+#=================================================
+
+pushd "$install_dir/packages/twenty-server"
+	ynh_use_nodejs
+	ynh_exec_warn_less ynh_exec_as $app env $ynh_node_load_PATH \
+        COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+        PG_DATABASE_URL=postgres://$db_user:$db_pwd@localhost/$db_name
+        yarn database:init:prod
+popd
+
+#=================================================
+# START SYSTEMD SERVICE
+#=================================================
+ynh_script_progression --message="Starting a systemd service..."
+
+# Start a systemd service
+ynh_systemd_action --service_name=$app --action="start" --log_path="systemd" --line_match="HTTP server listening on 127.0.0.1"
+
+
+#=================================================
+# END OF SCRIPT
+#=================================================
+
+ynh_script_progression --message="Installation of $app completed"

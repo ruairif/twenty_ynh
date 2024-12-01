@@ -1,0 +1,101 @@
+#!/bin/bash
+
+source /usr/share/yunohost/helpers
+
+#=================================================
+# ENSURE DOWNWARD COMPATIBILITY
+#=================================================
+ynh_script_progression --message="Ensuring downward compatibility..."
+
+# Remove repository
+ynh_secure_remove --file="/etc/apt/sources.list.d/yarn.list"
+
+# Remove hook
+if [[ -e "/usr/share/yunohost/hooks/conf_regen/15-nginx_$app" ]]
+then
+    ynh_secure_remove --file="/usr/share/yunohost/hooks/conf_regen/15-nginx_$app"
+    yunohost tools regen-conf nginx
+fi
+
+# Remove old log file
+ynh_secure_remove --file="$data_dir/logs"
+
+#=================================================
+# STOP SYSTEMD SERVICE
+#=================================================
+ynh_script_progression --message="Stopping a systemd service..."
+
+ynh_systemd_action --service_name=$app --action="stop" --log_path="systemd"
+
+#=================================================
+# DOWNLOAD, CHECK AND UNPACK SOURCE
+#=================================================
+ynh_script_progression --message="Setting up source files..."
+
+ynh_setup_source --dest_dir="$install_dir" --full_replace=1 \
+		--keep=".env"
+
+chmod -R o-rwx "$install_dir"
+chown -R $app:www-data "$install_dir"
+
+#=================================================
+# UPGRADE DEPENDENCIES
+#=================================================
+ynh_script_progression --message="Upgrading dependencies..."
+
+ynh_exec_warn_less ynh_install_nodejs --nodejs_version=$nodejs_version
+
+#=================================================
+# REAPPLY SYSTEM CONFIGURATIONS
+#=================================================
+ynh_script_progression --message="Adding system configurations..."
+
+ynh_add_nginx_config
+
+ynh_add_systemd_config
+
+mkdir -p "/var/log/$app"
+touch "/var/log/$app/$app.log"
+chown -R $app:$app "/var/log/$app"
+
+ynh_use_logrotate
+
+yunohost service add $app --description="Modern, powerful CRM platform" --log="/var/log/$app/$app.log"
+
+#=================================================
+# BUILD YARN DEPENDENCIES
+#=================================================
+ynh_script_progression --message="Building Yarn dependencies..."
+
+pushd "$install_dir"
+	ynh_use_nodejs
+	ynh_exec_warn_less ynh_exec_as $app env $ynh_node_load_PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0 yarn config set network-timeout 300000
+	ynh_exec_warn_less ynh_exec_as $app env $ynh_node_load_PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0 yarn install --production --pure-lockfile
+	ynh_exec_warn_less ynh_exec_as $app env $ynh_node_load_PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0 yarn cache clean
+popd
+
+#=================================================
+# Twenty Database migration
+#=================================================
+
+pushd "$install_dir/packages/twenty-server"
+	ynh_use_nodejs
+	ynh_exec_warn_less ynh_exec_as $app env $ynh_node_load_PATH \
+        COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+        PG_DATABASE_URL=postgres://$db_user:$db_pwd@localhost/$db_name
+        yarn database:migrate:prod
+popd
+
+#=================================================
+# START SYSTEMD SERVICE
+#=================================================
+ynh_script_progression --message="Starting systemd service..."
+
+ynh_systemd_action --service_name=$app --action="start" --log_path="systemd" --line_match="HTTP server listening on 127.0.0.1"
+
+
+#=================================================
+# END OF SCRIPT
+#=================================================
+
+ynh_script_progression --message="Upgrade of $app completed"

@@ -43,7 +43,7 @@ chown -R $app:www-data "$install_dir"
 #=================================================
 ynh_script_progression --message="Upgrading dependencies..."
 
-ynh_exec_warn_less ynh_install_nodejs --nodejs_version=$nodejs_version
+ynh_install_nodejs --nodejs_version=$nodejs_version
 
 #=================================================
 # REAPPLY SYSTEM CONFIGURATIONS
@@ -69,9 +69,9 @@ ynh_script_progression --message="Building Yarn dependencies..."
 
 pushd "$install_dir"
 	ynh_use_nodejs
-	ynh_exec_warn_less ynh_exec_as $app env $ynh_node_load_PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0 yarn config set network-timeout 300000
-	ynh_exec_warn_less ynh_exec_as $app env $ynh_node_load_PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0 yarn install --production --pure-lockfile
-	ynh_exec_warn_less ynh_exec_as $app env $ynh_node_load_PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0 yarn cache clean
+	ynh_exec_as $app env $ynh_node_load_PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0 yarn config set network-timeout 300000
+	ynh_exec_as $app env $ynh_node_load_PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0 yarn install --production --pure-lockfile
+	ynh_exec_as $app env $ynh_node_load_PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0 yarn cache clean
 popd
 
 #=================================================
@@ -80,7 +80,7 @@ popd
 
 pushd "$install_dir/packages/twenty-server"
 	ynh_use_nodejs
-	ynh_exec_warn_less ynh_exec_as $app env $ynh_node_load_PATH \
+	ynh_exec_as $app env $ynh_node_load_PATH \
         COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
         PG_DATABASE_URL=postgres://$db_user:$db_pwd@localhost/$db_name
         yarn database:migrate:prod

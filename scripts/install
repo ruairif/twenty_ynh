@@ -8,12 +8,13 @@ source /usr/share/yunohost/helpers
 #=================================================
 
 redis_db=$(ynh_redis_get_free_db)
+app_secret=$(openssl rand -base64 32)
 
 #=================================================
 # STORE SETTINGS FROM MANIFEST
 #=================================================
 
-ynh_app_setting_set --app="$app" --key=app_secret --value="$(openssl rand -base64 32)"
+ynh_app_setting_set --app="$app" --key=app_secret --value="$app_secret"
 ynh_app_setting_set --app="$app" --key=redis_db --value="$redis_db"
 
 #=================================================
@@ -28,7 +29,7 @@ ynh_install_nodejs --nodejs_version=$nodejs_version
 #=================================================
 ynh_script_progression --message="Initializing PostgreSQL database..."
 
-ynh_psql_execute_as_root --sql="CREATE DATABASE IF NOT EXISTS $db_name;"
+ynh_psql_execute_as_root --sql="CREATE DATABASE $db_name;"
 
 #=================================================
 # DOWNLOAD, CHECK AND UNPACK SOURCE
